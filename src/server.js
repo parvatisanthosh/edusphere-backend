@@ -33,6 +33,8 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const studentRoutes = require('./routes/students');
 const internshipRoutes = require('./routes/internships');
+const applicationRoutes = require('./routes/applications');
+
 
 
 // Use routes
@@ -40,6 +42,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/internships', internshipRoutes);
+app.use('/api/applications', applicationRoutes);
 
 
 // Error handling
@@ -51,12 +54,14 @@ app.use((err, req, res, next) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📚 API Endpoints:`);
+  console.log(`📚 API Endpoints:`); 
   console.log(`   - POST /api/auth/register`);
   console.log(`   - POST /api/auth/login`);
   console.log(`   - GET  /api/students`);
   console.log(`   - POST /api/students`);
   console.log(`   - GET  /api/internships`);
   console.log(`   - POST /api/internships`);
+  console.log(`   - GET  /api/applications`);
+  console.log(`   - POST /api/applications`);
 
 });
