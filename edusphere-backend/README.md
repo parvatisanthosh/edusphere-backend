@@ -1,2 +1,0 @@
-# edusphere-backend
-edusphere 
