@@ -35,6 +35,9 @@ const studentRoutes = require('./routes/students');
 const internshipRoutes = require('./routes/internships');
 const applicationRoutes = require('./routes/applications');
 
+const chatRoutes = require('./routes/chat');
+const mentorRoutes = require('./routes/mentors');
+
 
 
 // Use routes
@@ -43,6 +46,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/internships', internshipRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/mentors', mentorRoutes);
 
 
 // Error handling
