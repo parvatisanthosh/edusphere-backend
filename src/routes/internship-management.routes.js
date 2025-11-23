@@ -6,7 +6,7 @@ const { ensureAuthenticated } = require('../middleware/auth');
 const prisma = new PrismaClient();
 
 // ============================================
-// INTERNSHIP APPLICATIONS - Enhanced
+// INTERNSHIP APPLICATIONS
 // ============================================
 
 // APPLY TO INTERNSHIP
@@ -185,7 +185,7 @@ router.post('/applications/:applicationId/logbook', ensureAuthenticated, async (
         applicationId,
         date: new Date(date),
         taskDone,
-        proofUrl,
+        proofUrl: proofUrl || null,
         hours_spent: parseInt(hours_spent)
       }
     });
@@ -342,16 +342,28 @@ router.post('/applications/:applicationId/evaluate', ensureAuthenticated, async 
           include: { student: true }
         });
 
-        await prisma.credits.upsert({
-          where: { student_id: application.student_id },
-          update: {
-            credits_earned: { increment: credits }
-          },
-          create: {
-            student_id: application.student_id,
-            credits_earned: credits
-          }
+        // Find existing credits record
+        const existingCredits = await prisma.credits.findFirst({
+          where: { student_id: application.student_id }
         });
+
+        if (existingCredits) {
+          // Update existing
+          await prisma.credits.update({
+            where: { id: existingCredits.id },
+            data: {
+              credits_earned: { increment: credits }
+            }
+          });
+        } else {
+          // Create new
+          await prisma.credits.create({
+            data: {
+              student_id: application.student_id,
+              credits_earned: credits
+            }
+          });
+        }
       }
     }
 
@@ -399,22 +411,27 @@ router.get('/faculty/applications-to-evaluate', ensureAuthenticated, async (req,
     const userId = req.user.id;
 
     const faculty = await prisma.faculty.findUnique({
-      where: { userId },
+      where: { userId }
+    });
+
+    if (!faculty) {
+      return res.status(403).json({ error: 'Faculty access required' });
+    }
+
+    // Get students assigned to this faculty
+    const students = await prisma.profile.findMany({
+      where: { facultyId: faculty.id },
       include: {
-        students: {
+        internshipApplications: {
+          where: {
+            status: 'SELECTED'
+          },
           include: {
-            internshipApplications: {
+            internship: true,
+            logbookEntries: true,
+            evaluations: {
               where: {
-                status: 'SELECTED'
-              },
-              include: {
-                internship: true,
-                logbookEntries: true,
-                evaluations: {
-                  where: {
-                    faculty_id: faculty?.id
-                  }
-                }
+                faculty_id: faculty.id
               }
             }
           }
@@ -422,17 +439,17 @@ router.get('/faculty/applications-to-evaluate', ensureAuthenticated, async (req,
       }
     });
 
-    if (!faculty) {
-      return res.status(403).json({ error: 'Faculty access required' });
-    }
-
     // Flatten applications
     const applications = [];
-    faculty.students.forEach(student => {
+    students.forEach(student => {
       student.internshipApplications.forEach(app => {
         applications.push({
           ...app,
-          student
+          student: {
+            id: student.id,
+            userId: student.userId,
+            user: student.user
+          }
         });
       });
     });
@@ -473,7 +490,7 @@ router.post('/applications/:applicationId/certificate', ensureAuthenticated, asy
       data: {
         student_id: application.student_id,
         title: `${application.internship.title} - Internship Completion`,
-        certificateUrl: `/certificates/${applicationId}.pdf`, // You'd generate this
+        certificateUrl: `/certificates/${applicationId}.pdf`,
         issuedAt: new Date()
       }
     });
