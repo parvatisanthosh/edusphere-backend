@@ -61,6 +61,99 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/my-progress', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const profile = await prisma.profile.findUnique({
+      where: { userId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Student profile not found' });
+    }
+
+    const progress = await prisma.studentLearningProgress.findMany({
+      where: { profileId: profile.id },
+      include: {
+        checkpoint: {
+          include: {
+            roadmap: {
+              select: {
+                id: true,
+                title: true,
+                domain: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { completedAt: 'desc' }
+    });
+
+    // Group by roadmap
+    const progressByRoadmap = {};
+    progress.forEach(p => {
+      const roadmapId = p.checkpoint.roadmap.id;
+      if (!progressByRoadmap[roadmapId]) {
+        progressByRoadmap[roadmapId] = {
+          roadmap: p.checkpoint.roadmap,
+          total: 0,
+          completed: 0,
+          checkpoints: []
+        };
+      }
+      progressByRoadmap[roadmapId].total++;
+      if (p.isCompleted) progressByRoadmap[roadmapId].completed++;
+      progressByRoadmap[roadmapId].checkpoints.push(p);
+    });
+
+    // Calculate percentages
+    Object.keys(progressByRoadmap).forEach(key => {
+      const data = progressByRoadmap[key];
+      data.progressPercentage = data.total > 0 
+        ? Math.round((data.completed / data.total) * 100)
+        : 0;
+    });
+
+    res.json({
+      progress: Object.values(progressByRoadmap)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch progress' });
+  }
+});
+
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const topLearners = await prisma.credits.findMany({
+      take: parseInt(limit),
+      orderBy: { credits_earned: 'desc' },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                displayName: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.json({ leaderboard: topLearners });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+
 // GET ROADMAP BY ID (with checkpoints and student progress)
 router.get('/:id', ensureAuthenticated, async (req, res) => {
   try {
@@ -252,97 +345,8 @@ router.post('/checkpoints/:checkpointId/progress', ensureAuthenticated, async (r
 });
 
 // GET STUDENT'S OVERALL PROGRESS
-router.get('/my-progress', ensureAuthenticated, async (req, res) => {
-  try {
-    const userId = req.user.id;
 
-    const profile = await prisma.profile.findUnique({
-      where: { userId }
-    });
-
-    if (!profile) {
-      return res.status(404).json({ error: 'Student profile not found' });
-    }
-
-    const progress = await prisma.studentLearningProgress.findMany({
-      where: { profileId: profile.id },
-      include: {
-        checkpoint: {
-          include: {
-            roadmap: {
-              select: {
-                id: true,
-                title: true,
-                domain: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: { completedAt: 'desc' }
-    });
-
-    // Group by roadmap
-    const progressByRoadmap = {};
-    progress.forEach(p => {
-      const roadmapId = p.checkpoint.roadmap.id;
-      if (!progressByRoadmap[roadmapId]) {
-        progressByRoadmap[roadmapId] = {
-          roadmap: p.checkpoint.roadmap,
-          total: 0,
-          completed: 0,
-          checkpoints: []
-        };
-      }
-      progressByRoadmap[roadmapId].total++;
-      if (p.isCompleted) progressByRoadmap[roadmapId].completed++;
-      progressByRoadmap[roadmapId].checkpoints.push(p);
-    });
-
-    // Calculate percentages
-    Object.keys(progressByRoadmap).forEach(key => {
-      const data = progressByRoadmap[key];
-      data.progressPercentage = data.total > 0 
-        ? Math.round((data.completed / data.total) * 100)
-        : 0;
-    });
-
-    res.json({
-      progress: Object.values(progressByRoadmap)
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch progress' });
-  }
-});
 
 // GET LEADERBOARD (top learners by credits)
-router.get('/leaderboard', async (req, res) => {
-  try {
-    const { limit = 10 } = req.query;
-
-    const topLearners = await prisma.credits.findMany({
-      take: parseInt(limit),
-      orderBy: { credits_earned: 'desc' },
-      include: {
-        student: {
-          include: {
-            user: {
-              select: {
-                displayName: true,
-                email: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    res.json({ leaderboard: topLearners });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch leaderboard' });
-  }
-});
 
 module.exports = router;

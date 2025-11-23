@@ -11,33 +11,25 @@ router.post('/', async (req, res) => {
     const {
       title,
       description,
-      companyName,
-      location,
       type,
-      duration,
       stipend,
-      requiredSkills,
-      startDate,
-      endDate,
-      applicationDeadline,
-      postedBy
+      location,
+      required_skills,
+      duration_weeks,
+      industry_user_id
     } = req.body;
 
-    const internship = await prisma.internship.create({
+    const internship = await prisma.internships.create({
       data: {
         title,
         description,
-        companyName,
-        location,
         type,
-        duration,
-        stipend,
-        requiredSkills: JSON.stringify(requiredSkills),
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
-        postedBy,
-        isActive: true
+        stipend: stipend ? parseFloat(stipend) : null,
+        location,
+        required_skills: JSON.stringify(required_skills),
+        duration_weeks: parseInt(duration_weeks),
+        created_at: new Date(),
+        industry_user_id
       }
     });
 
@@ -54,15 +46,14 @@ router.post('/', async (req, res) => {
 // GET ALL INTERNSHIPS (with filters)
 router.get('/', async (req, res) => {
   try {
-    const { location, type, isActive } = req.query;
+    const { location, type } = req.query;
 
     const where = {};
     
     if (location) where.location = { contains: location };
     if (type) where.type = type;
-    if (isActive !== undefined) where.isActive = isActive === 'true';
 
-    const internships = await prisma.internship.findMany({
+    const internships = await prisma.internships.findMany({
       where,
       include: {
         _count: {
@@ -70,14 +61,16 @@ router.get('/', async (req, res) => {
         }
       },
       orderBy: {
-        createdAt: 'desc'
+        created_at: 'desc'
       }
     });
 
-    // Parse requiredSkills JSON
+    // Parse required_skills JSON if it's a string
     const formattedInternships = internships.map(internship => ({
       ...internship,
-      requiredSkills: JSON.parse(internship.requiredSkills),
+      required_skills: typeof internship.required_skills === 'string' 
+        ? JSON.parse(internship.required_skills) 
+        : internship.required_skills,
       applicationsCount: internship._count.applications
     }));
 
@@ -93,7 +86,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const internship = await prisma.internship.findUnique({
+    const internship = await prisma.internships.findUnique({
       where: { id },
       include: {
         applications: {
@@ -102,7 +95,7 @@ router.get('/:id', async (req, res) => {
               include: {
                 user: {
                   select: {
-                    name: true,
+                    displayName: true,
                     email: true
                   }
                 }
@@ -117,8 +110,10 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Internship not found' });
     }
 
-    // Parse requiredSkills
-    internship.requiredSkills = JSON.parse(internship.requiredSkills);
+    // Parse required_skills if it's a string
+    if (typeof internship.required_skills === 'string') {
+      internship.required_skills = JSON.parse(internship.required_skills);
+    }
 
     res.json({ internship });
   } catch (error) {
@@ -133,22 +128,30 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // Convert dates
-    if (updateData.startDate) updateData.startDate = new Date(updateData.startDate);
-    if (updateData.endDate) updateData.endDate = new Date(updateData.endDate);
-    if (updateData.applicationDeadline) updateData.applicationDeadline = new Date(updateData.applicationDeadline);
-
-    // Convert skills array to JSON string
-    if (updateData.requiredSkills) {
-      updateData.requiredSkills = JSON.stringify(updateData.requiredSkills);
+    // Convert skills array to JSON string if it's an array
+    if (updateData.required_skills && Array.isArray(updateData.required_skills)) {
+      updateData.required_skills = JSON.stringify(updateData.required_skills);
     }
 
-    const internship = await prisma.internship.update({
+    // Parse duration_weeks to int if it exists
+    if (updateData.duration_weeks) {
+      updateData.duration_weeks = parseInt(updateData.duration_weeks);
+    }
+
+    // Parse stipend to float if it exists
+    if (updateData.stipend) {
+      updateData.stipend = parseFloat(updateData.stipend);
+    }
+
+    const internship = await prisma.internships.update({
       where: { id },
       data: updateData
     });
 
-    internship.requiredSkills = JSON.parse(internship.requiredSkills);
+    // Parse required_skills for response if it's a string
+    if (typeof internship.required_skills === 'string') {
+      internship.required_skills = JSON.parse(internship.required_skills);
+    }
 
     res.json({
       message: 'Internship updated',
@@ -160,17 +163,16 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE INTERNSHIP (soft delete - set isActive to false)
+// DELETE INTERNSHIP (hard delete)
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    await prisma.internship.update({
-      where: { id },
-      data: { isActive: false }
+    await prisma.internships.delete({
+      where: { id }
     });
 
-    res.json({ message: 'Internship deactivated' });
+    res.json({ message: 'Internship deleted' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to delete internship' });
