@@ -41,13 +41,13 @@ app.get('/', (req, res) => {
 });
 
 
-const userRoutes = require('./routes/users');
+const userRoutes = require('./routes/users.routes');
 
-const internshipRoutes = require('./routes/internships');
-const applicationRoutes = require('./routes/applications');
+const internshipRoutes = require('./routes/internships.routes');
+const applicationRoutes = require('./routes/applications.routes');
 const roadmapsRouter = require('./routes/roadmaps.routes');
 const internshipMgmtRouter = require('./routes/internship-management.routes');
-const mentorRouter = require('./routes/mentor');
+const mentorRouter = require('./routes/mentor.routes');
 
 //to avoid merge conflicts i have imported ur stuff...
 

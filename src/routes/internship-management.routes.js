@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
@@ -126,8 +126,8 @@ router.get('/my-applications', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// UPDATE APPLICATION STATUS (Admin/Industry)
-router.patch('/applications/:id/status', ensureAuthenticated, async (req, res) => {
+// UPDATE APPLICATION STATUS (Admin/Industry only)
+router.patch('/applications/:id/status', ensureAuthenticated, restrictToRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -272,7 +272,7 @@ router.delete('/logbook/:id', ensureAuthenticated, async (req, res) => {
 // ============================================
 
 // CREATE/UPDATE EVALUATION (Faculty only)
-router.post('/applications/:applicationId/evaluate', ensureAuthenticated, async (req, res) => {
+router.post('/applications/:applicationId/evaluate', ensureAuthenticated, restrictToRole('faculty'), async (req, res) => {
   try {
     const { applicationId } = req.params;
     const { rubric_json, comments, final_score } = req.body;
@@ -465,8 +465,8 @@ router.get('/faculty/applications-to-evaluate', ensureAuthenticated, async (req,
 // CERTIFICATES
 // ============================================
 
-// GENERATE CERTIFICATE (After evaluation complete)
-router.post('/applications/:applicationId/certificate', ensureAuthenticated, async (req, res) => {
+// GENERATE CERTIFICATE (admin/faculty only)
+router.post('/applications/:applicationId/certificate', ensureAuthenticated, restrictToRole('faculty'), async (req, res) => {
   try {
     const { applicationId } = req.params;
 

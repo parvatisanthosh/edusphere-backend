@@ -1,11 +1,9 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
-
-// router.use(ensureAuthenticated);
 
 const toStringArray = (value, fallback = []) => {
   if (!value) return fallback;
@@ -25,8 +23,8 @@ const toStringArray = (value, fallback = []) => {
   return fallback;
 };
 
-// CREATE STUDENT PROFILE
-router.post('/', async (req, res) => {
+// CREATE STUDENT PROFILE (requires authentication)
+router.post('/', ensureAuthenticated, async (req, res) => {
   try {
     const {
       userId,
@@ -158,48 +156,29 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// UPDATE STUDENT PROFILE
-router.put('/:id', async (req, res) => {
+// UPDATE STUDENT PROFILE (requires authentication)
+// UPDATE PROFILE DETAILS (PARTIAL - student-only)
+router.patch('/:id/profile', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body };
 
-    if (updateData.DOB) {
-      updateData.DOB = new Date(updateData.DOB);
-    }
+   
 
-    if (updateData.skills !== undefined) {
-      updateData.skills = toStringArray(updateData.skills);
-    }
-
-    if (updateData.interests !== undefined) {
-      updateData.interests = toStringArray(updateData.interests);
-    }
-
-    const profile = await prisma.profile.update({
+    // Fetch existing profile to authorize
+    const existing = await prisma.profile.findUnique({
       where: { id },
-      data: updateData,
-      include: {
-        user: true,
-        institution: true,
-        faculty: true,
-      },
+      select: { id: true, userId: true },
     });
 
-    res.json({ message: 'Student profile updated', profile });
-  } catch (error) {
-    console.error(error);
-    if (error.code === 'P2025') {
-      return res.status(404).json({ error: 'Student profile not found' });
+    if (!existing) {
+      return res.status(404).json({ error: 'Profile not found' });
     }
-    res.status(500).json({ error: 'Failed to update student profile' });
-  }
-});
 
-// UPDATE PROFILE DETAILS (PARTIAL)
-router.post('/:id/profile', async (req, res) => {
-  try {
-    const { id } = req.params;
+     if (String(req.user.id) !== String(existing.userId)) {
+      return res.status(403).json({ error: 'Forbidden — you can only edit your own profile' });
+    }
+
+    // Extract possible updatable fields
     const {
       bio,
       gender,
@@ -215,22 +194,36 @@ router.post('/:id/profile', async (req, res) => {
       facultyId,
     } = req.body;
 
+    const clean = (v) => (v === '' ? null : v === undefined ? undefined : v);
+
+    const data = {
+      bio: clean(bio),
+      gender: clean(gender),
+      DOB: DOB ? new Date(DOB) : undefined,
+      avatarURL: clean(avatarURL),
+      github: clean(github),
+      linkedin: clean(linkedin),
+      skills: skills !== undefined ? toStringArray(skills) : undefined,
+      interests: interests !== undefined ? toStringArray(interests) : undefined,
+      department: clean(department),
+      resourceId:
+        resourceId !== undefined && resourceId !== null && resourceId !== '' ? Number(resourceId) : undefined,
+      instituteId:
+        instituteId !== undefined && instituteId !== null && instituteId !== '' ? Number(instituteId) : undefined,
+      facultyId:
+        facultyId !== undefined && facultyId !== null && facultyId !== '' ? Number(facultyId) : undefined,
+    };
+
+    // Remove undefined keys so Prisma ignores them
+    Object.keys(data).forEach((k) => data[k] === undefined && delete data[k]);
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'No updatable fields provided' });
+    }
+
     const profile = await prisma.profile.update({
       where: { id },
-      data: {
-        bio,
-        gender,
-        DOB: DOB ? new Date(DOB) : undefined,
-        avatarURL,
-        github,
-        linkedin,
-        skills: skills !== undefined ? toStringArray(skills) : undefined,
-        interests: interests !== undefined ? toStringArray(interests) : undefined,
-        department,
-        resourceId,
-        instituteId,
-        facultyId,
-      },
+      data,
       include: {
         user: true,
         institution: true,
@@ -238,13 +231,13 @@ router.post('/:id/profile', async (req, res) => {
       },
     });
 
-    res.json({ message: 'Profile details updated', profile });
+    return res.status(200).json({ message: 'Profile details updated', profile });
   } catch (error) {
-    console.error(error);
-    if (error.code === 'P2025') {
+    console.error('Profile PATCH error:', error);
+    if (error?.code === 'P2025') {
       return res.status(404).json({ error: 'Student profile not found' });
     }
-    res.status(500).json({ error: 'Failed to update profile details' });
+    return res.status(500).json({ error: 'Failed to update profile details' });
   }
 });
 
