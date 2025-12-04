@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-router.post("/register", async (req, res) => {
+router.post("/register", ensureAuthenticated, restrictToRole('admin'), async (req, res) => {
     try{
     const { instituteId, userId, department } = req.body;
     if (!instituteId || !userId || !department) {

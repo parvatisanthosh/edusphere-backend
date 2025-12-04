@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 // ============================================
 
 // CREATE ROADMAP (Faculty/Admin only)
-router.post('/', ensureAuthenticated, async (req, res) => {
+router.post('/', ensureAuthenticated, restrictToRole('faculty'), async (req, res) => {
   try {
     const { title, description, domain } = req.body;
 
@@ -202,8 +202,8 @@ router.get('/:id', ensureAuthenticated, async (req, res) => {
 // CHECKPOINT MANAGEMENT
 // ============================================
 
-// ADD CHECKPOINT TO ROADMAP
-router.post('/:roadmapId/checkpoints', ensureAuthenticated, async (req, res) => {
+// ADD CHECKPOINT TO ROADMAP (faculty/admin only)
+router.post('/:roadmapId/checkpoints', ensureAuthenticated, restrictToRole('faculty'), async (req, res) => {
   try {
     const { roadmapId } = req.params;
     const { title, description, resourceType, resourceUrl } = req.body;
@@ -232,8 +232,8 @@ router.post('/:roadmapId/checkpoints', ensureAuthenticated, async (req, res) => 
   }
 });
 
-// UPDATE CHECKPOINT
-router.put('/checkpoints/:id', ensureAuthenticated, async (req, res) => {
+// UPDATE CHECKPOINT (faculty/admin only)
+router.put('/checkpoints/:id', ensureAuthenticated, restrictToRole('faculty'), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -253,8 +253,8 @@ router.put('/checkpoints/:id', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// DELETE CHECKPOINT
-router.delete('/checkpoints/:id', ensureAuthenticated, async (req, res) => {
+// DELETE CHECKPOINT (faculty/admin only)
+router.delete('/checkpoints/:id', ensureAuthenticated, restrictToRole('faculty'), async (req, res) => {
   try {
     const { id } = req.params;
 

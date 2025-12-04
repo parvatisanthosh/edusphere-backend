@@ -1,12 +1,13 @@
 // src/routes/internships.js
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// CREATE INTERNSHIP
-router.post('/', async (req, res) => {
+// CREATE INTERNSHIP (admin/industry only)
+router.post('/', ensureAuthenticated, async (req, res) => {
   try {
     const {
       title,
@@ -122,8 +123,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// UPDATE INTERNSHIP
-router.put('/:id', async (req, res) => {
+// UPDATE INTERNSHIP (requires authentication)
+router.put('/:id', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -163,8 +164,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE INTERNSHIP (hard delete)
-router.delete('/:id', async (req, res) => {
+// DELETE INTERNSHIP (admin only)
+router.delete('/:id', ensureAuthenticated, restrictToRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
 

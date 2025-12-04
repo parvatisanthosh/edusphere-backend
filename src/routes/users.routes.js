@@ -1,12 +1,13 @@
 // src/routes/users.js
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// GET ALL USERS (for testing)
-router.get('/', async (req, res) => {
+// GET ALL USERS (admin only)
+router.get('/', ensureAuthenticated, restrictToRole('admin'), async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: {

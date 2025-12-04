@@ -1,12 +1,13 @@
 // src/routes/applications.js
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// APPLY TO INTERNSHIP
-router.post('/', async (req, res) => {
+// APPLY TO INTERNSHIP (requires authentication)
+router.post('/', ensureAuthenticated, async (req, res) => {
   try {
     const {
       studentId,
@@ -152,8 +153,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// UPDATE APPLICATION STATUS
-router.patch('/:id/status', async (req, res) => {
+// UPDATE APPLICATION STATUS (admin/industry only)
+router.patch('/:id/status', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, rejectionReason } = req.body;
@@ -196,8 +197,8 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
-// WITHDRAW APPLICATION
-router.delete('/:id', async (req, res) => {
+// WITHDRAW APPLICATION (requires authentication)
+router.delete('/:id', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
 

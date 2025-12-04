@@ -1,19 +1,26 @@
 const jwt = require('jsonwebtoken');
 
 const authenticationMiddleware = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization || '';
-    if (!authHeader.startsWith('Bearer ')) {
-      return next();
-    }
+  const authHeader = (req.headers.authorization || '').trim();
 
-    const token = authHeader.split(' ')[1];
-    req.user = jwt.verify(token, process.env.JWT_SECRET_KEY);
-  } catch (error) {
-    console.log('JWT verification failed:', error);
+  
+  if (!authHeader) {
+    return next();
   }
 
-  next();
+  const [scheme, token] = authHeader.split(' ');
+
+  if (scheme !== 'Bearer' || !token || token === 'null' || token === 'undefined') {
+    return res.status(401).json({ message: 'Invalid authorization header' });
+  }
+
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    return next();
+  } catch (error) {
+    console.log('JWT verification failed:', error.message);
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
 };
 
 const ensureAuthenticated = (req, res, next) => {
