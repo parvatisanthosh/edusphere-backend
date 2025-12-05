@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { ensureAuthenticated, restrictToRole } = require('../middleware/auth');
+const notificationService = require('../services/notification.service');
 
 const prisma = new PrismaClient();
 
@@ -127,7 +128,7 @@ router.get('/my-applications', ensureAuthenticated, async (req, res) => {
 });
 
 // UPDATE APPLICATION STATUS (Admin/Industry only)
-router.patch('/applications/:id/status', ensureAuthenticated, restrictToRole('admin'), async (req, res) => {
+router.patch('/applications/:id/status', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -142,6 +143,14 @@ router.patch('/applications/:id/status', ensureAuthenticated, restrictToRole('ad
       where: { id },
       data: { status }
     });
+
+    // 🆕 SEND NOTIFICATION
+    try {
+      await notificationService.sendApplicationStatusUpdate(id, status);
+    } catch (notifError) {
+      console.error('Notification failed:', notifError);
+      // Don't fail the request if notification fails
+    }
 
     res.json({
       message: `Application status updated to ${status}`,

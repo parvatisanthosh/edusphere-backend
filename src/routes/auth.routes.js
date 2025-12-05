@@ -92,7 +92,7 @@ router.post('/login', async (req, res) => {
 
     // Create JWT payload with userId (not just id)
     const payload = {
-      userId: user.id,  // ✅ Changed from 'id' to 'userId'
+      id: user.id,  // ✅ Changed from 'id' to 'userId'
       email: user.email,
       displayName: user.displayName,
       role: user.role,

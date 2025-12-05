@@ -366,12 +366,32 @@ model certificates {
 // --------------------------------------------------
 
 model notifications {
-  id         String   @id @default(uuid()) @db.Uuid
-  title      String
-  message    String
-  created_at DateTime
-
+  id                String               @id @default(uuid())
+  title             String
+  message           String
+  type              NotificationType     @default(SYSTEM) // NEW
+  channel           NotificationChannel  @default(IN_APP) // NEW
+  created_at        DateTime
   userNotifications user_notifications[]
+  // NEW: Track delivery status
+  smsDelivered      Boolean              @default(false)
+  whatsappDelivered Boolean              @default(false)
+  deliveryError     String?
+}
+enum NotificationType {
+  SYSTEM
+  APPLICATION_STATUS
+  INTERVIEW_REMINDER
+  NEW_INTERNSHIP
+  MENTOR_SESSION
+  EVALUATION_COMPLETE
+}
+enum NotificationChannel {
+  IN_APP
+  SMS
+  WHATSAPP
+  EMAIL
+  ALL
 }
 
 // --------------------------------------------------
@@ -379,12 +399,13 @@ model notifications {
 // --------------------------------------------------
 
 model user_notifications {
-  id              String    @id @default(uuid()) @db.Uuid
-  user_id         String    @db.Uuid
-  notification_id String    @db.Uuid
+  id              String        @id @default(uuid())
+  user_id         String
+  notification_id String
   isRead          Boolean
   read_at         DateTime?
-
-  user         users         @relation(fields: [user_id], references: [id])
-  notification notifications @relation(fields: [notification_id], references: [id])
+  deliveredViaSMS Boolean       @default(false) // NEW
+  deliveredViaWhatsApp Boolean  @default(false) // NEW
+  notification    notifications @relation(fields: [notification_id], references: [id])
+  user            users         @relation(fields: [user_id], references: [id])
 }

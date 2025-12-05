@@ -18,6 +18,7 @@ const roadmapsRouter = require('./routes/roadmaps.routes');
 const internshipMgmtRouter = require('./routes/internship-management.routes');
 const mentorRouter = require('./routes/mentor.routes');
 const chatRouter = require('./routes/chat.routes');
+const notificationsRouter = require('./routes/notifications.routes');
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use('/roadmaps', roadmapsRouter);
 app.use('/internship-management', internshipMgmtRouter);
 app.use('/mentor', mentorRouter);
 app.use('/chat', chatRouter);
+app.use('/notifications', notificationsRouter);
 
 // ============================================
 // ERROR HANDLING
