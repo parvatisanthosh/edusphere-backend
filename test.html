@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Chat</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    input { padding: 10px; margin: 5px; width: 300px; }
+    button { padding: 10px 20px; margin: 5px; }
+    #messages { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; margin-top: 20px; }
+    .message { padding: 5px; margin: 5px 0; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h1>WebSocket Chat Test</h1>
+  
+  <div>
+    <h3>Step 1: Connect</h3>
+    <input type="text" id="token" placeholder="Paste JWT Token here">
+    <button onclick="connect()">Connect</button>
+  </div>
+  
+  <div>
+    <h3>Step 2: Join Room</h3>
+    <input type="text" id="roomId" placeholder="Enter Room ID">
+    <button onclick="joinRoom()">Join Room</button>
+  </div>
+  
+  <div>
+    <h3>Step 3: Send Message</h3>
+    <input type="text" id="message" placeholder="Type message">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+  
+  <div id="messages"></div>
+
+  <script>
+    let socket;
+    let currentRoom;
+
+    function connect() {
+      const token = document.getElementById('token').value;
+      
+      if (!token) {
+        alert('Please enter JWT token');
+        return;
+      }
+
+      socket = io('http://localhost:8000', {
+        auth: { token: token }
+      });
+
+      socket.on('connect', () => {
+        addMessage('✅ CONNECTED to server', 'green');
+      });
+
+      socket.on('new-message', (data) => {
+        addMessage(`${data.senderName}: ${data.message}`, 'black');
+      });
+
+      socket.on('user-joined', (data) => {
+        addMessage(`👋 ${data.userName} joined`, 'blue');
+      });
+
+      socket.on('user-left', (data) => {
+        addMessage(`👋 ${data.userName} left`, 'red');
+      });
+
+      socket.on('user-typing', (data) => {
+        if (data.isTyping) {
+          addMessage(`✏️ ${data.userName} is typing...`, 'gray');
+        }
+      });
+
+      socket.on('error', (data) => {
+        addMessage(`❌ ${data.message}`, 'red');
+      });
+
+      socket.on('disconnect', () => {
+        addMessage('❌ DISCONNECTED', 'red');
+      });
+    }
+
+    function joinRoom() {
+      currentRoom = document.getElementById('roomId').value;
+      
+      if (!currentRoom) {
+        alert('Please enter room ID');
+        return;
+      }
+
+      if (!socket) {
+        alert('Please connect first');
+        return;
+      }
+
+      socket.emit('join-room', currentRoom);
+      addMessage(`Joining room: ${currentRoom}`, 'purple');
+    }
+
+    function sendMessage() {
+      const message = document.getElementById('message').value;
+      
+      if (!message) {
+        alert('Please type a message');
+        return;
+      }
+
+      if (!currentRoom) {
+        alert('Please join a room first');
+        return;
+      }
+
+      socket.emit('send-message', {
+        roomId: currentRoom,
+        message: message
+      });
+      
+      document.getElementById('message').value = '';
+    }
+
+    function addMessage(msg, color = 'black') {
+      const div = document.getElementById('messages');
+      const time = new Date().toLocaleTimeString();
+      div.innerHTML += `<div class="message" style="color: ${color}">[${time}] ${msg}</div>`;
+      div.scrollTop = div.scrollHeight;
+    }
+  </script>
+</body>
+</html>

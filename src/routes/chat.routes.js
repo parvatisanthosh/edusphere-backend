@@ -1,18 +1,20 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticationMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// ============================================
-// CHAT ROOMS
-// ============================================
-
 // CREATE CHAT ROOM
-router.post('/rooms', authenticateToken, async (req, res) => {
+router.post('/rooms', authenticationMiddleware, async (req, res) => {
   try {
     const { name, type, internshipId, participantIds } = req.body;
+    
+    // Check if user is authenticated
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized - User ID not found' });
+    }
+    
     const userId = req.user.userId;
 
     const chatRoom = await prisma.chatRoom.create({
@@ -20,11 +22,19 @@ router.post('/rooms', authenticateToken, async (req, res) => {
         name,
         type,
         internshipId,
-        createdBy: userId,
+        creator: {
+          connect: { id: userId }
+        },
         participants: {
           create: [
-            { userId, role: 'admin' },
-            ...(participantIds || []).map(id => ({ userId: id, role: 'member' }))
+            { 
+              user: { connect: { id: userId } },
+              role: 'admin' 
+            },
+            ...(participantIds || []).map(id => ({ 
+              user: { connect: { id } },
+              role: 'member' 
+            }))
           ]
         }
       },
@@ -32,7 +42,7 @@ router.post('/rooms', authenticateToken, async (req, res) => {
         participants: {
           include: {
             user: {
-              select: { id: true, name: true, email: true }
+              select: { id: true, displayName: true, email: true }
             }
           }
         }
@@ -44,14 +54,21 @@ router.post('/rooms', authenticateToken, async (req, res) => {
       chatRoom
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to create chat room' });
+    console.error('❌ CREATE CHAT ROOM ERROR:', error);
+    res.status(500).json({ 
+      error: 'Failed to create chat room',
+      details: error.message
+    });
   }
 });
 
 // GET USER'S CHAT ROOMS
-router.get('/rooms', authenticateToken, async (req, res) => {
+router.get('/rooms', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const userId = req.user.userId;
 
     const chatRooms = await prisma.chatRoom.findMany({
@@ -64,7 +81,7 @@ router.get('/rooms', authenticateToken, async (req, res) => {
         participants: {
           include: {
             user: {
-              select: { id: true, name: true, email: true }
+              select: { id: true, displayName: true, email: true }
             }
           }
         },
@@ -83,13 +100,16 @@ router.get('/rooms', authenticateToken, async (req, res) => {
 });
 
 // GET CHAT ROOM MESSAGES
-router.get('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
+router.get('/rooms/:roomId/messages', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { roomId } = req.params;
     const userId = req.user.userId;
     const { limit = 50, before } = req.query;
 
-    // Check if user is participant
     const participant = await prisma.chatParticipant.findFirst({
       where: { chatRoomId: roomId, userId }
     });
@@ -105,14 +125,13 @@ router.get('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
       },
       include: {
         sender: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, displayName: true, email: true }
         }
       },
       orderBy: { createdAt: 'desc' },
       take: parseInt(limit)
     });
 
-    // Update last read
     await prisma.chatParticipant.update({
       where: { id: participant.id },
       data: { lastReadAt: new Date() }
@@ -126,13 +145,16 @@ router.get('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
 });
 
 // SEND MESSAGE
-router.post('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
+router.post('/rooms/:roomId/messages', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { roomId } = req.params;
     const { message } = req.body;
     const userId = req.user.userId;
 
-    // Check if user is participant
     const participant = await prisma.chatParticipant.findFirst({
       where: { chatRoomId: roomId, userId }
     });
@@ -143,13 +165,13 @@ router.post('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
 
     const newMessage = await prisma.chatMessage.create({
       data: {
-        chatRoomId: roomId,
-        senderId: userId,
+        chatRoom: { connect: { id: roomId } },
+        sender: { connect: { id: userId } },
         message
       },
       include: {
         sender: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, displayName: true, email: true }
         }
       }
     });
@@ -164,13 +186,13 @@ router.post('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================
-// DISCUSSION FORUMS
-// ============================================
-
 // CREATE FORUM
-router.post('/forums', authenticateToken, async (req, res) => {
+router.post('/forums', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { topic, description, category } = req.body;
     const userId = req.user.userId;
 
@@ -179,11 +201,11 @@ router.post('/forums', authenticateToken, async (req, res) => {
         topic,
         description,
         category,
-        createdBy: userId
+        creator: { connect: { id: userId } }
       },
       include: {
         creator: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, displayName: true, email: true }
         }
       }
     });
@@ -207,7 +229,7 @@ router.get('/forums', async (req, res) => {
       where: category ? { category } : undefined,
       include: {
         creator: {
-          select: { id: true, name: true }
+          select: { id: true, displayName: true }
         },
         _count: {
           select: { posts: true }
@@ -231,7 +253,6 @@ router.get('/forums/:forumId/posts', async (req, res) => {
   try {
     const { forumId } = req.params;
 
-    // Increment view count
     await prisma.discussionForum.update({
       where: { id: forumId },
       data: { viewCount: { increment: 1 } }
@@ -241,18 +262,18 @@ router.get('/forums/:forumId/posts', async (req, res) => {
       where: { id: forumId },
       include: {
         creator: {
-          select: { id: true, name: true }
+          select: { id: true, displayName: true }
         },
         posts: {
           where: { parentPostId: null },
           include: {
             user: {
-              select: { id: true, name: true }
+              select: { id: true, displayName: true }
             },
             replies: {
               include: {
                 user: {
-                  select: { id: true, name: true }
+                  select: { id: true, displayName: true }
                 }
               }
             }
@@ -274,22 +295,26 @@ router.get('/forums/:forumId/posts', async (req, res) => {
 });
 
 // CREATE FORUM POST
-router.post('/forums/:forumId/posts', authenticateToken, async (req, res) => {
+router.post('/forums/:forumId/posts', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { forumId } = req.params;
     const { content, parentPostId } = req.body;
     const userId = req.user.userId;
 
     const post = await prisma.forumPost.create({
       data: {
-        forumId,
-        userId,
+        forum: { connect: { id: forumId } },
+        user: { connect: { id: userId } },
         content,
-        parentPostId
+        ...(parentPostId && { parentPost: { connect: { id: parentPostId } } })
       },
       include: {
         user: {
-          select: { id: true, name: true }
+          select: { id: true, displayName: true }
         }
       }
     });
@@ -305,7 +330,7 @@ router.post('/forums/:forumId/posts', authenticateToken, async (req, res) => {
 });
 
 // UPVOTE POST
-router.post('/posts/:postId/upvote', authenticateToken, async (req, res) => {
+router.post('/posts/:postId/upvote', authenticationMiddleware, async (req, res) => {
   try {
     const { postId } = req.params;
 
@@ -321,29 +346,29 @@ router.post('/posts/:postId/upvote', authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================
-// DIRECT MESSAGES
-// ============================================
-
 // SEND DIRECT MESSAGE
-router.post('/messages', authenticateToken, async (req, res) => {
+router.post('/messages', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { receiverId, subject, body } = req.body;
     const userId = req.user.userId;
 
     const message = await prisma.message.create({
       data: {
-        senderId: userId,
-        receiverId,
+        sender: { connect: { id: userId } },
+        receiver: { connect: { id: receiverId } },
         subject,
         body
       },
       include: {
         sender: {
-          select: { id: true, name: true }
+          select: { id: true, displayName: true }
         },
         receiver: {
-          select: { id: true, name: true }
+          select: { id: true, displayName: true }
         }
       }
     });
@@ -359,8 +384,12 @@ router.post('/messages', authenticateToken, async (req, res) => {
 });
 
 // GET INBOX
-router.get('/messages/inbox', authenticateToken, async (req, res) => {
+router.get('/messages/inbox', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const userId = req.user.userId;
 
     const messages = await prisma.message.findMany({
@@ -370,7 +399,7 @@ router.get('/messages/inbox', authenticateToken, async (req, res) => {
       },
       include: {
         sender: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, displayName: true, email: true }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -384,12 +413,16 @@ router.get('/messages/inbox', authenticateToken, async (req, res) => {
 });
 
 // MARK AS READ
-router.patch('/messages/:messageId/read', authenticateToken, async (req, res) => {
+router.patch('/messages/:messageId/read', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { messageId } = req.params;
     const userId = req.user.userId;
 
-    const message = await prisma.message.updateMany({
+    await prisma.message.updateMany({
       where: {
         id: messageId,
         receiverId: userId
@@ -404,19 +437,19 @@ router.patch('/messages/:messageId/read', authenticateToken, async (req, res) =>
   }
 });
 
-// ============================================
-// ANNOUNCEMENTS
-// ============================================
-
-// CREATE ANNOUNCEMENT (Admin only)
-router.post('/announcements', authenticateToken, async (req, res) => {
+// CREATE ANNOUNCEMENT
+router.post('/announcements', authenticationMiddleware, async (req, res) => {
   try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { title, content, targetAudience, priority, expiresAt } = req.body;
     const userId = req.user.userId;
 
     const announcement = await prisma.announcement.create({
       data: {
-        postedBy: userId,
+        poster: { connect: { id: userId } },
         title,
         content,
         targetAudience,
@@ -450,7 +483,7 @@ router.get('/announcements', async (req, res) => {
       },
       include: {
         poster: {
-          select: { id: true, name: true }
+          select: { id: true, displayName: true }
         }
       },
       orderBy: [

@@ -12,6 +12,14 @@ router.post('/register', async (req, res) => {
   try {
     const { displayName, email, password, role = [], phone } = req.body;
     
+    // Validate required fields
+    if (!displayName || !email || !password || !phone) {
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        required: ['displayName', 'email', 'password', 'phone']
+      });
+    }
+    
     // Normalize role to array
     const normalizedRole = Array.isArray(role) ? role : [role];
 
@@ -35,8 +43,8 @@ router.post('/register', async (req, res) => {
     // Create user
     const user = await prisma.users.create({
       data: {
-        email,
         displayName,
+        email,
         role: normalizedRole,
         hashPassword: hash,
         salt,
@@ -51,7 +59,10 @@ router.post('/register', async (req, res) => {
     
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: error.message 
+    });
   }
 });
 
@@ -79,11 +90,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Create JWT payload
+    // Create JWT payload with userId (not just id)
     const payload = {
-      id: user.id,
+      userId: user.id,  // ✅ Changed from 'id' to 'userId'
       email: user.email,
-      name: user.displayName,
+      displayName: user.displayName,
       role: user.role,
       phone: user.phone
     };
@@ -97,7 +108,10 @@ router.post('/login', async (req, res) => {
     // Return response
     res.status(200).json({ 
       message: 'Login successful', 
-      id: user.id,
+      userId: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      role: user.role,
       token: token 
     });
     
